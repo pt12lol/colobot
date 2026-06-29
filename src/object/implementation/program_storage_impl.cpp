@@ -42,12 +42,14 @@
 
 #include "physics/physics.h"
 
+#include "script/cbottoken.h"
 #include "script/script.h"
 
 #include "ui/controls/edit.h"
 
 #include <algorithm>
 #include <iomanip>
+#include <set>
 #include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -411,4 +413,85 @@ void CProgramStorageObjectImpl::LoadAllProgramsForSavedScene(CLevelParserLine* l
     // Disable automatic user program storage now!!
     // This is to prevent overwriting auto-saved user programs with older versions from saved scenes
     m_allowProgramSave = false;
+}
+
+void CProgramStorageObjectImpl::SyncProgramsToFs(const std::string& syncRoot)
+{
+    if (m_programStorageIndex < 0) return;
+
+    std::string botDir = syncRoot + "/" + GetObjectName(m_object->GetType())
+                       + StrUtils::Format("_%.3d", m_programStorageIndex);
+    CResourceManager::CreateNewDirectory(botDir);
+
+    for (unsigned int i = 0; i < m_program.size(); i++)
+    {
+        if (m_program[i]->readOnly) continue;
+        std::string filename = botDir + StrUtils::Format("/slot%.3d.cbot", static_cast<int>(i));
+        WriteProgram(m_program[i].get(), filename);
+    }
+
+    boost::regex regex("slot([0-9]{3})\\.cbot");
+    for (const std::string& f : CResourceManager::ListFiles(botDir))
+    {
+        boost::smatch matches;
+        if (!boost::regex_match(f, matches, regex)) continue;
+        unsigned int id = boost::lexical_cast<unsigned int>(matches[1]);
+        if (id >= m_program.size() || m_program[id]->readOnly)
+        {
+            CResourceManager::Remove(botDir + "/" + f);
+        }
+    }
+}
+
+void CProgramStorageObjectImpl::SyncProgramsFromFs(const std::string& syncRoot)
+{
+    if (m_programStorageIndex < 0) return;
+
+    std::string botDir = syncRoot + "/" + GetObjectName(m_object->GetType())
+                       + StrUtils::Format("_%.3d", m_programStorageIndex);
+    if (!CResourceManager::DirectoryExists(botDir)) return;
+
+    boost::regex regex("slot([0-9]{3})\\.cbot");
+    std::set<unsigned int> foundSlots;
+    unsigned int maxSlot = 0;
+    for (const std::string& f : CResourceManager::ListFiles(botDir))
+    {
+        boost::smatch matches;
+        if (!boost::regex_match(f, matches, regex)) continue;
+        unsigned int id = boost::lexical_cast<unsigned int>(matches[1]);
+        foundSlots.insert(id);
+        if (id > maxSlot) maxSlot = id;
+    }
+
+    unsigned int targetCount = foundSlots.empty() ? m_program.size() : std::max<unsigned int>(maxSlot + 1, m_program.size());
+
+    for (unsigned int i = 0; i < targetCount; i++)
+    {
+        std::string filename = botDir + StrUtils::Format("/slot%.3d.cbot", static_cast<int>(i));
+        bool fileExists = foundSlots.count(i) > 0;
+
+        Program* program = (i < m_program.size()) ? m_program[i].get() : nullptr;
+
+        // Skip read-only (e.g. soluce from scene.txt) — never touched by sync
+        if (program != nullptr && program->readOnly) continue;
+        // Skip running programs — CScript couples source with the running bytecode.
+        // Reload only takes effect after the bot stops.
+        if (program != nullptr && program->script->IsRunning()) continue;
+
+        if (fileExists)
+        {
+            if (program == nullptr) program = GetOrAddProgram(i);
+            ReadProgram(program, filename);
+        }
+        else if (program != nullptr)
+        {
+            // File deleted in external editor → clear the slot's content
+            program->script->SendScript("");
+        }
+        else
+        {
+            // Gap (no file, no slot) — fill with empty slot to preserve indices
+            GetOrAddProgram(i);
+        }
+    }
 }

@@ -53,6 +53,11 @@ public:
 
     void        SetInfoText(std::string text, bool bClickable);
 
+    //! Pull text from the edit widget into m_script (so disk save sees the user's latest typing)
+    void        FlushBufferToScript();
+    //! Push m_script's source back into the edit widget (after external reload from disk)
+    void        RefreshBufferFromScript();
+
 protected:
     bool        EventFrame(const Event &event);
     void        SearchToken(CEdit* edit);

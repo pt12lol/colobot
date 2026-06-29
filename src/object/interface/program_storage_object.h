@@ -104,4 +104,9 @@ public:
     virtual void SaveAllProgramsForSavedScene(CLevelParserLine* levelSourceLine, const std::string& levelSource) = 0;
     //! Load all programs when loading the saved scene
     virtual void LoadAllProgramsForSavedScene(CLevelParserLine* levelSourceLine, const std::string& levelSource) = 0;
+
+    //! Write all non-readonly programs into syncRoot/<BotType>_<idx>/slot<n>.txt for external editing
+    virtual void SyncProgramsToFs(const std::string& syncRoot) = 0;
+    //! Re-read programs from syncRoot. Missing slot files clear the slot; new slot files add new programs. Running programs are skipped.
+    virtual void SyncProgramsFromFs(const std::string& syncRoot) = 0;
 };

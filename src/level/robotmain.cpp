@@ -96,6 +96,7 @@
 #include "ui/mainmap.h"
 #include "ui/mainshort.h"
 #include "ui/mainui.h"
+#include "ui/studio.h"
 
 #include "ui/controls/button.h"
 #include "ui/controls/edit.h"
@@ -724,6 +725,7 @@ bool CRobotMain::ProcessEvent(Event &event)
             m_sound->SetAudioVolume(0);
             m_sound->SetMusicVolume(0);
         }
+        SyncProgramsToFs();
         return false;
     }
 
@@ -759,6 +761,9 @@ bool CRobotMain::ProcessEvent(Event &event)
             }
         }
 
+        // Delay the reload — external editors with "save on focus lost" need a moment
+        // to flush their buffers after our window steals focus.
+        m_syncReloadDelay = 0.15f;
         return false;
     }
 
@@ -1030,13 +1035,18 @@ bool CRobotMain::ProcessEvent(Event &event)
                 {
                     SetSpeed(GetSpeed()*2.0f);
                 }
-                if (data->slot == INPUT_SLOT_QUICKSAVE)
+                bool shiftHeld = (event.kmodState & KEY_MOD(SHIFT)) != 0;
+                if (data->slot == INPUT_SLOT_QUICKSAVE && !shiftHeld)
                 {
                     QuickSave();
                 }
                 if (data->slot == INPUT_SLOT_QUICKLOAD)
                 {
                     QuickLoad();
+                }
+                if (data->key == KEY(F5) && shiftHeld)
+                {
+                    m_eventQueue->AddEvent(Event(EVENT_OBJECT_PROGRUN));
                 }
                 if (data->key == KEY(c) && ((event.kmodState & KEY_MOD(CTRL)) != 0) && m_engine->GetShowStats())
                 {
@@ -2343,6 +2353,15 @@ void CRobotMain::InitEye()
 bool CRobotMain::EventFrame(const Event &event)
 {
     m_time += event.rTime;
+
+    if (m_syncReloadDelay >= 0.0f)
+    {
+        m_syncReloadDelay -= event.rTime;
+        if (m_syncReloadDelay < 0.0f)
+        {
+            SyncProgramsFromFs();
+        }
+    }
 
     m_water->EventProcess(event);
     m_cloud->EventProcess(event);
@@ -3849,6 +3868,8 @@ void CRobotMain::CreateScene(bool soluce, bool fixScene, bool resetObject)
         CreateCodeBattleInterface();
     }
     CreateShortcuts();
+
+    SyncProgramsToFs();
 }
 
 void CRobotMain::LevelLoadingError(const std::string& error, const std::runtime_error& exception, Phase exitPhase)
@@ -4489,6 +4510,42 @@ void CRobotMain::SaveOneScript(CObject *obj)
 
     char categoryChar = GetLevelCategoryDir(m_levelCategory)[0];
     programStorage->SaveAllUserPrograms(m_playerProfile->GetSaveFile(StrUtils::Format("%c%.3d%.3d", categoryChar, m_levelChap, m_levelRank)));
+}
+
+void CRobotMain::SyncProgramsToFs()
+{
+    if (m_playerProfile == nullptr) return;
+
+    // Studio holds unsaved text in its edit widget — push it to CScript before writing files.
+    if (m_activeStudio != nullptr) m_activeStudio->FlushBufferToScript();
+
+    char categoryChar = GetLevelCategoryDir(m_levelCategory)[0];
+    std::string syncRoot = m_playerProfile->GetSaveFile(StrUtils::Format("synced/%c%.3d%.3d", categoryChar, m_levelChap, m_levelRank));
+    CResourceManager::CreateNewDirectory(m_playerProfile->GetSaveFile("synced"));
+    CResourceManager::CreateNewDirectory(syncRoot);
+
+    for (CObject* obj : m_objMan->GetAllObjects())
+    {
+        if (!obj->Implements(ObjectInterfaceType::ProgramStorage)) continue;
+        dynamic_cast<CProgramStorageObject*>(obj)->SyncProgramsToFs(syncRoot);
+    }
+}
+
+void CRobotMain::SyncProgramsFromFs()
+{
+    if (m_playerProfile == nullptr) return;
+    char categoryChar = GetLevelCategoryDir(m_levelCategory)[0];
+    std::string syncRoot = m_playerProfile->GetSaveFile(StrUtils::Format("synced/%c%.3d%.3d", categoryChar, m_levelChap, m_levelRank));
+    if (!CResourceManager::DirectoryExists(syncRoot)) return;
+
+    for (CObject* obj : m_objMan->GetAllObjects())
+    {
+        if (!obj->Implements(ObjectInterfaceType::ProgramStorage)) continue;
+        dynamic_cast<CProgramStorageObject*>(obj)->SyncProgramsFromFs(syncRoot);
+    }
+
+    // Studio's edit widget still shows the pre-sync text — push the (potentially updated) CScript back into it.
+    if (m_activeStudio != nullptr) m_activeStudio->RefreshBufferFromScript();
 }
 
 //! Saves the stack of the program in execution of a robot

@@ -61,6 +61,9 @@ public:
     void SaveAllProgramsForSavedScene(CLevelParserLine* levelSourceLine, const std::string& levelSource) override;
     void LoadAllProgramsForSavedScene(CLevelParserLine* levelSourceLine, const std::string& levelSource) override;
 
+    void SyncProgramsToFs(const std::string& syncRoot) override;
+    void SyncProgramsFromFs(const std::string& syncRoot) override;
+
 private:
     CObject* m_object;
 

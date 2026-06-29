@@ -567,6 +567,7 @@ void CStudio::StartEditScript(CScript *script, std::string name, Program* progra
     m_script  = script;
     m_program = program;
 
+    m_main->SetActiveStudio(this);
     m_main->SetEditLock(true, true);
     m_main->SetEditFull(false);
     m_main->SetSpeed(1.0f);
@@ -932,6 +933,7 @@ bool CStudio::StopEditScript(bool closeWithErrors)
     m_pause->DeactivatePause(m_runningPause);
     m_runningPause = nullptr;
     m_main->SetEditLock(false, true);
+    m_main->SetActiveStudio(nullptr);
     m_camera->SetType(m_editCamera);
 
     m_settings->SetIOPos(m_dialogPos);
@@ -1223,6 +1225,27 @@ void CStudio::UpdateButtons()
     button = static_cast< CButton* >(pw->SearchControl(EVENT_STUDIO_PASTE));
     if ( button == nullptr )  return;
     button->SetState(STATE_ENABLE, !m_program->readOnly);
+}
+
+void CStudio::FlushBufferToScript()
+{
+    if (m_script == nullptr || m_script->IsRunning()) return;
+    CWindow* pw = static_cast<CWindow*>(m_interface->SearchControl(EVENT_WINDOW3));
+    if (pw == nullptr) return;
+    CEdit* edit = static_cast<CEdit*>(pw->SearchControl(EVENT_STUDIO_EDIT));
+    if (edit == nullptr) return;
+    m_script->GetScript(edit);
+}
+
+void CStudio::RefreshBufferFromScript()
+{
+    if (m_script == nullptr || m_script->IsRunning()) return;
+    CWindow* pw = static_cast<CWindow*>(m_interface->SearchControl(EVENT_WINDOW3));
+    if (pw == nullptr) return;
+    CEdit* edit = static_cast<CEdit*>(pw->SearchControl(EVENT_STUDIO_EDIT));
+    if (edit == nullptr) return;
+    m_script->PutScript(edit, "");
+    ColorizeScript(edit);
 }
 
 } // namespace Ui
