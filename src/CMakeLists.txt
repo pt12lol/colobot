@@ -584,13 +584,29 @@ endif()
 target_link_libraries(colobot colobotbase SDL2::Main)
 
 # Install
-install(TARGETS colobot RUNTIME DESTINATION ${COLOBOT_INSTALL_BIN_DIR})
+install(TARGETS colobot RUNTIME DESTINATION ${COLOBOT_INSTALL_BIN_DIR} COMPONENT runtime)
 if(MSVC)
-    install(FILES $<TARGET_PDB_FILE:colobot> CONFIGURATIONS Debug RelWithDebInfo DESTINATION ${COLOBOT_INSTALL_BIN_DIR} OPTIONAL)
+    install(FILES $<TARGET_PDB_FILE:colobot> CONFIGURATIONS Debug RelWithDebInfo DESTINATION ${COLOBOT_INSTALL_BIN_DIR} OPTIONAL COMPONENT runtime)
 endif()
 if(NOT CBOT_STATIC)
     set_target_properties(colobot PROPERTIES INSTALL_RPATH ${COLOBOT_INSTALL_LIB_DIR})
 endif()
+
+# Swap only the runtime binaries (executable + CBot lib) into the install
+# prefix, skipping the heavy game-data install. Depends on colobot so the
+# binary is up to date before installing.
+add_custom_target(install-bin
+    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component runtime --config $<CONFIG>
+    COMMENT "Installing colobot binary + CBot library (component: runtime)"
+    VERBATIM)
+add_dependencies(install-bin colobot)
+
+# One-shot: (re)build the executable on all cores, then swap it into the system.
+# Its two dependencies are the build (colobot) and the install (install-bin);
+# install-bin's own dependency on colobot guarantees install runs after build,
+# even under parallel make (e.g. cmake --build build -j8 --target build-and-install).
+add_custom_target(build-and-install)
+add_dependencies(build-and-install colobot install-bin)
 
 # Linter-specific
 if(COLOBOT_LINT_BUILD)
