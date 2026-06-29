@@ -116,6 +116,7 @@ class CInterface;
 class CDisplayText;
 class CDisplayInfo;
 class CDebugMenu;
+class CStudio;
 }
 
 struct NewScriptName
@@ -313,6 +314,15 @@ public:
     void        SaveOneScript(CObject *obj);
     bool        SaveFileStack(CObject *obj, std::ostream &ostr);
     bool        ReadFileStack(CObject *obj, std::istream &istr);
+
+    //! Dump all programs of all bots into a friendly-named directory for external editing
+    void        SyncProgramsToFs();
+    //! Re-read all programs from the sync directory back into bot memory
+    void        SyncProgramsFromFs();
+
+    //! Register/unregister the currently open program editor (only one can be open at a time)
+    void        SetActiveStudio(Ui::CStudio* studio) { m_activeStudio = studio; }
+    Ui::CStudio* GetActiveStudio() { return m_activeStudio; }
 
     //! Return list of scripts to load to robot created in BotFactory
     std::vector<std::string> GetNewScriptNames(ObjectType type);
@@ -633,6 +643,8 @@ protected:
     bool            m_satComLock = false;      // call of SatCom is possible?
     bool            m_editLock = false;        // edition in progress?
     bool            m_editFull = false;        // edition in full screen?
+    Ui::CStudio*    m_activeStudio = nullptr;  // currently open program editor (if any)
+    float           m_syncReloadDelay = -1.0f; // seconds remaining before next SyncProgramsFromFs; negative = no pending reload
     bool            m_hilite = false;
     bool            m_cheatTrainerPilot = false;    // remote trainer?
     bool            m_friendAim = false;
