@@ -512,6 +512,8 @@ void CStudio::SearchToken(CEdit* edit)
         token[i] = text[cursor2+i];
     }
     token[i] = 0;
+    token.resize(len);  // trim to the real word length so "token == objectName" matches
+                        // (token was built as a fixed 100-char buffer)
 
     m_helpFilename = GetHelpFilename(token.c_str());
     if ( m_helpFilename.length() == 0 )
