@@ -19,6 +19,7 @@
 
 
 #include "ui/controls/edit.h"
+#include "ui/controls/code_completion.h"
 
 #include "common/config.h"
 
@@ -49,6 +50,7 @@ namespace Ui
 {
 namespace
 {
+const int COMPLETION_MAX_VISIBLE = 10;  // rows shown before the completion popup scrolls
 const float MARGX           = (3.75f/640.0f);
 const float MARGY           = (3.75f/480.0f);
 const float MARGYS          = (2.75f/480.0f);
@@ -131,6 +133,9 @@ CEdit::CEdit()
     m_lineDescent = 0.0f;
     m_timeLastClick = 0.0f;
     m_bMultiFont = false;
+    m_completion = std::make_unique<CCodeCompletion>();
+    m_completionIndex = -1;
+    m_completionScroll = 0;
     m_lineAscent = 0.0f;
     m_historyTotal = 0;
     m_lineTotal = 0;
@@ -256,6 +261,17 @@ bool CEdit::EventProcess(const Event &event)
 
     if ( (m_state & STATE_VISIBLE) == 0 )  return true;
 
+    if (event.type == EVENT_MOUSE_WHEEL && m_completionIndex >= 0 && !m_completionItems.empty())
+    {
+        auto data = event.GetData<MouseWheelEventData>();
+        int n = static_cast<int>(m_completionItems.size());
+        int maxScroll = std::max(0, n - COMPLETION_MAX_VISIBLE);
+        m_completionScroll -= data->y;
+        if (m_completionScroll < 0) m_completionScroll = 0;
+        if (m_completionScroll > maxScroll) m_completionScroll = maxScroll;
+        return true;
+    }
+
     if (event.type == EVENT_MOUSE_WHEEL &&
         Detect(event.mousePos))
     {
@@ -320,6 +336,34 @@ bool CEdit::EventProcess(const Event &event)
     {
         auto data = event.GetData<KeyEventData>();
 
+        // Code completion popup: while it's open, these keys drive it instead
+        // of the editor (navigate / accept / dismiss).
+        if ( m_completionIndex >= 0 && !m_completionItems.empty() )
+        {
+            int n = static_cast<int>(m_completionItems.size());
+            if ( data->key == KEY(UP) || data->key == KEY(DOWN) )
+            {
+                if ( data->key == KEY(UP) ) m_completionIndex = (m_completionIndex - 1 + n) % n;
+                else                        m_completionIndex = (m_completionIndex + 1) % n;
+                // keep the selection inside the visible window
+                if ( m_completionIndex < m_completionScroll )
+                    m_completionScroll = m_completionIndex;
+                if ( m_completionIndex >= m_completionScroll + COMPLETION_MAX_VISIBLE )
+                    m_completionScroll = m_completionIndex - COMPLETION_MAX_VISIBLE + 1;
+                return true;
+            }
+            if ( data->key == KEY(RETURN) || data->key == KEY(TAB) )
+            {
+                HandleCompletionSelect(m_completionItems[m_completionIndex]);
+                return true;
+            }
+            if ( data->key == KEY(ESCAPE) )
+            {
+                HideCompletion();
+                return true;
+            }
+        }
+
         if ( (data->key == KEY(x)      && !bShift &&  bControl) ||
              (data->key == KEY(DELETE) &&  bShift && !bControl) )
         {
@@ -353,6 +397,11 @@ bool CEdit::EventProcess(const Event &event)
         {
             m_event->AddEvent(Event(EVENT_STUDIO_SAVE));
         }
+        if ( data->key == KEY(F12) )
+        {
+            m_event->AddEvent(Event(EVENT_STUDIO_HELP));  // jump to docs for token under cursor
+            return true;
+        }
 
         if ( data->key == KEY(z) && !bShift && bControl )
         {
@@ -367,6 +416,12 @@ bool CEdit::EventProcess(const Event &event)
         if ( data->key == KEY(u) && bShift && bControl )
         {
             if ( MinMaj(true) )  return true;
+        }
+
+        if ( data->key == KEY(SPACE) && !bShift && bControl )
+        {
+            ShowCompletion();
+            return true;
         }
 
         if ( data->key == KEY(TAB) && !bShift && !bControl && !m_bAutoIndent )
@@ -454,6 +509,7 @@ bool CEdit::EventProcess(const Event &event)
         {
             Delete(-1);
             SendModifEvent();
+            UpdateCompletion();  // re-filter popup if open
             return true;
         }
         if ( data->key == KEY(DELETE) && !bControl )
@@ -493,11 +549,16 @@ bool CEdit::EventProcess(const Event &event)
     if ( event.type == EVENT_TEXT_INPUT && !bControl && m_bFocus )
     {
         auto data = event.GetData<TextInputData>();
+        bool typedDot = false;
         for ( char c : data->text )
         {
             Insert(c);
+            if ( c == '.' ) typedDot = true;
         }
         SendModifEvent();
+        // Typing '.' auto-opens the popup in member context.
+        if ( typedDot ) m_completionIndex = 0;
+        UpdateCompletion();
         return true;
     }
 
@@ -1159,6 +1220,8 @@ void CEdit::Draw()
     {
         m_scroll->Draw();
     }
+
+    DrawCompletion();
 }
 
 // Draw an image part.
@@ -3333,6 +3396,293 @@ void CEdit::SetFocus(CControl* control)
 void CEdit::UpdateFocus()
 {
     CApplication::GetInstancePointer()->SetTextInput(m_bFocus, m_eventType);
+}
+
+void CEdit::ShowCompletion()
+{
+    if (!m_bEdit || !m_completion) return;
+    m_completionIndex = 0;
+    m_completionScroll = 0;
+    UpdateCompletion();
+}
+
+void CEdit::HideCompletion()
+{
+    m_completionItems.clear();
+    m_completionIndex = -1;
+    m_completionScroll = 0;
+}
+
+void CEdit::SetUserSymbols(const std::vector<std::string>& funcs)
+{
+    m_userSymbols.clear();
+    for (const std::string& name : funcs)
+    {
+        // User-defined functions; shown like builtins (name + parentheses).
+        m_userSymbols.push_back({ CompletionItem::Function, name + "()", name, "" });
+    }
+}
+
+// Best-effort type of a variable, read from its declaration in the text
+// ("object o;" -> "object"). Returns "" if no declaration is found.
+std::string CEdit::InferDeclaredType(const std::string& name)
+{
+    if (name.empty()) return "";
+
+    auto isTypeWord = [](const std::string& w) {
+        return w == "object" || w == "point" || w == "int" || w == "float" ||
+               w == "bool" || w == "boolean" || w == "string" || w == "void" || w == "file";
+    };
+
+    std::string prevWord, curWord, result;
+    for (size_t i = 0; i <= m_text.size(); i++)
+    {
+        char c = (i < m_text.size()) ? m_text[i] : '\0';
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_')
+        {
+            curWord += c;
+            continue;
+        }
+        if (!curWord.empty())
+        {
+            if (curWord == name && isTypeWord(prevWord)) result = prevWord;  // last decl wins
+            prevWord = curWord;
+            curWord.clear();
+        }
+    }
+    return result;
+}
+
+// Variables declared in the text ("<type> name;"), for autocompletion.
+std::vector<CompletionItem> CEdit::CollectLocalVariables()
+{
+    auto isTypeWord = [](const std::string& w) {
+        return w == "object" || w == "point" || w == "int" || w == "float" ||
+               w == "bool" || w == "boolean" || w == "string" || w == "file";
+    };
+
+    std::vector<CompletionItem> vars;
+    std::string prevWord, curWord;
+    for (size_t i = 0; i <= m_text.size(); i++)
+    {
+        char c = (i < m_text.size()) ? m_text[i] : '\0';
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_')
+        {
+            curWord += c;
+            continue;
+        }
+        if (!curWord.empty())
+        {
+            bool isName = std::isalpha(static_cast<unsigned char>(curWord[0])) || curWord[0] == '_';
+            if (isTypeWord(prevWord) && !isTypeWord(curWord) && isName)
+            {
+                bool dup = false;
+                for (const auto& v : vars) { if (v.text == curWord) { dup = true; break; } }
+                if (!dup) vars.push_back({ CompletionItem::Variable, curWord, curWord, "" });
+            }
+            prevWord = curWord;
+            curWord.clear();
+        }
+    }
+    return vars;
+}
+
+bool CEdit::UpdateCompletion()
+{
+    if (m_completionIndex < 0 || !m_completion) {
+        HideCompletion();
+        return false;
+    }
+
+    int start = m_cursor1;
+    while (start > 0 && (std::isalnum(static_cast<unsigned char>(m_text[start-1])) || m_text[start-1] == '_'))
+        start--;
+
+    std::string word = m_text.substr(start, m_cursor1 - start);
+    std::string context;
+
+    // Member context: the word is preceded by a dot (e.g. "obj.pos|").
+    if (start > 0 && m_text[start-1] == '.')
+    {
+        // Base identifier right before the dot.
+        int dot = start - 1;
+        int b = dot;
+        while (b > 0 && (std::isalnum(static_cast<unsigned char>(m_text[b-1])) || m_text[b-1] == '_'))
+            b--;
+        std::string base = m_text.substr(b, dot - b);
+
+        if (base.empty() || std::isdigit(static_cast<unsigned char>(base[0])))
+        {
+            context = "num.";                 // number literal / no identifier -> no members
+        }
+        else if (base == "this")
+        {
+            context = "object.";
+        }
+        else
+        {
+            std::string type = InferDeclaredType(base);
+            if (type == "object")      context = "object.";
+            else if (type == "point")  context = "point.";
+            else if (type.empty())     context = "object.";   // unknown decl -> best effort
+            else                       context = type + ".";  // primitive -> no members
+        }
+    }
+
+    std::vector<CompletionItem> extra = m_userSymbols;
+    if (context.empty())  // normal context: also offer user-declared variables
+    {
+        std::vector<CompletionItem> vars = CollectLocalVariables();
+        extra.insert(extra.end(), vars.begin(), vars.end());
+    }
+    m_completionItems = m_completion->GetCompletions(word, context, extra);
+
+    if (m_completionItems.empty()) {
+        HideCompletion();
+        return false;
+    }
+
+    m_completionIndex = std::min(m_completionIndex, static_cast<int>(m_completionItems.size()) - 1);
+    int n = static_cast<int>(m_completionItems.size());
+    if (m_completionScroll > n - COMPLETION_MAX_VISIBLE) m_completionScroll = n - COMPLETION_MAX_VISIBLE;
+    if (m_completionScroll < 0) m_completionScroll = 0;
+    if (m_completionIndex < m_completionScroll) m_completionScroll = m_completionIndex;
+    if (m_completionIndex >= m_completionScroll + COMPLETION_MAX_VISIBLE)
+        m_completionScroll = m_completionIndex - COMPLETION_MAX_VISIBLE + 1;
+    return true;
+}
+
+void CEdit::DrawCompletion()
+{
+    if (m_completionIndex < 0 || m_completionItems.empty()) return;
+
+    float size = m_fontSize;
+
+    // Locate the cursor on screen (mirrors the caret-drawing logic in Draw()).
+    Math::Point cur, start, end;
+    cur.x = m_pos.x + (7.5f/640.0f);
+    cur.y = m_pos.y + m_dim.y - m_lineHeight - (m_bMulti ? MARGY : MARGY1*2.0f);
+    for (int i = m_lineFirst; i < m_lineTotal; i++)
+    {
+        if (i == m_lineTotal-1 || m_cursor1 < m_lineOffset[i+1])
+        {
+            int len = m_cursor1 - m_lineOffset[i];
+            m_engine->GetText()->SizeText(std::string(m_text.data()+m_lineOffset[i]).substr(0, len),
+                                          m_fontType, size, cur, Gfx::TEXT_ALIGN_LEFT, start, end);
+            cur.x = end.x;
+            break;
+        }
+        cur.y -= m_lineHeight;
+    }
+
+    int n = static_cast<int>(m_completionItems.size());
+    int vis = std::min(n, COMPLETION_MAX_VISIBLE);
+    int scroll = m_completionScroll;
+    if (scroll > n - vis) scroll = std::max(0, n - vis);
+    if (scroll < 0) scroll = 0;
+
+    float itemH = m_lineHeight;
+    float boxH = itemH * vis;
+
+    // Widest label sets the box width.
+    float w = 0.0f;
+    for (const auto& it : m_completionItems)
+    {
+        float tw = m_engine->GetText()->GetStringWidth(it.displayLabel, m_fontType, size);
+        if (tw > w) w = tw;
+    }
+    float markerW = 6.0f/640.0f;
+    float textPad = 12.0f/640.0f;                       // room for the type marker + gap
+    float scrollbarW = (n > vis) ? 4.0f/640.0f : 0.0f;
+    w += textPad + 4.0f/640.0f + scrollbarW;
+
+    Math::Point box, dim;
+    box.x = cur.x;
+    dim.x = w;
+    dim.y = boxH;
+    box.y = cur.y - boxH;               // drop-down below the cursor
+    if (box.y < m_pos.y) box.y = cur.y + m_lineHeight;  // flip above if no room
+
+    DrawColor(box, dim, Gfx::Color(0.94f, 0.94f, 0.90f, 1.0f));  // light background
+
+    for (int r = 0; r < vis; r++)
+    {
+        int k = scroll + r;
+        Math::Point ip;
+        ip.x = box.x;
+        ip.y = box.y + boxH - itemH*(r+1);  // row r from top
+        if (k == m_completionIndex)
+        {
+            Math::Point hd;
+            hd.x = dim.x - scrollbarW;
+            hd.y = itemH;
+            DrawColor(ip, hd, Gfx::Color(1.0f, 0.62f, 0.075f, 1.0f));  // orange selection
+        }
+
+        // Marker colored to match the code's syntax highlighting (text.cpp).
+        Gfx::Color mc;
+        switch (m_completionItems[k].type)
+        {
+            case CompletionItem::Keyword:         mc = Gfx::Color(0.239f, 0.431f, 0.588f, 1.0f); break;  // #3D6E96
+            case CompletionItem::Function:
+            case CompletionItem::BuiltinFunction: mc = Gfx::Color(0.490f, 0.380f, 0.165f, 1.0f); break;  // #7D612A
+            case CompletionItem::Type:            mc = Gfx::Color(0.310f, 0.443f, 0.196f, 1.0f); break;  // #4F7132
+            case CompletionItem::Member:          mc = Gfx::Color(0.545f, 0.329f, 0.608f, 1.0f); break;  // #8B549B
+            case CompletionItem::Constant:        mc = Gfx::Color(0.882f, 0.176f, 0.176f, 1.0f); break;  // #E12D2D
+            case CompletionItem::Variable:        mc = Gfx::Color(0.000f, 0.550f, 0.550f, 1.0f); break;  // teal
+            default:                              mc = Gfx::Color(0.40f, 0.40f, 0.40f, 1.0f); break;
+        }
+        Math::Point mp, md;
+        mp.x = ip.x + 3.0f/640.0f;
+        mp.y = ip.y + (itemH - markerW)*0.5f;
+        md.x = markerW;
+        md.y = markerW;
+        DrawColor(mp, md, mc);
+
+        Math::Point tp;
+        tp.x = ip.x + textPad;
+        tp.y = ip.y;
+        m_engine->GetText()->DrawText(m_completionItems[k].displayLabel, m_fontType,
+                                      size, tp, box.x + dim.x, Gfx::TEXT_ALIGN_LEFT, 0);
+    }
+
+    // Scrollbar (track + thumb) when the list overflows the visible window.
+    if (n > vis)
+    {
+        Math::Point trp, trd;
+        trd.x = scrollbarW - 1.0f/640.0f;
+        trd.y = boxH;
+        trp.x = box.x + dim.x - scrollbarW;
+        trp.y = box.y;
+        DrawColor(trp, trd, Gfx::Color(0.75f, 0.75f, 0.72f, 1.0f));  // track
+
+        Math::Point thp, thd;
+        thd.x = trd.x;
+        thd.y = boxH * static_cast<float>(vis) / static_cast<float>(n);
+        thp.x = trp.x;
+        thp.y = box.y + boxH - boxH * static_cast<float>(scroll + vis) / static_cast<float>(n);
+        DrawColor(thp, thd, Gfx::Color(0.45f, 0.45f, 0.42f, 1.0f));  // thumb
+    }
+}
+
+void CEdit::HandleCompletionSelect(const CompletionItem& item)
+{
+    if (m_completionIndex < 0) return;
+
+    int start = m_cursor1;
+    while (start > 0 && (std::isalnum(m_text[start-1]) || m_text[start-1] == '_'))
+        start--;
+
+    while (m_cursor1 > start) {
+        DeleteOne(-1);
+    }
+
+    for (char c : item.text) {
+        Insert(c);
+    }
+
+    HideCompletion();
+    SendModifEvent();
 }
 
 }

@@ -429,7 +429,7 @@ bool CEngine::ProcessEvent(const Event &event)
     {
         auto data = event.GetData<KeyEventData>();
 
-        if (data->key == KEY(F11) || data->key == KEY(F12))
+        if ((data->key == KEY(F11) || data->key == KEY(F12)) && !m_showStatsLocked)
         {
             m_showStats = !m_showStats;
             return false;
@@ -533,6 +533,11 @@ void CEngine::SetShowStats(bool show)
 bool CEngine::GetShowStats()
 {
     return m_showStats;
+}
+
+void CEngine::SetShowStatsLocked(bool locked)
+{
+    m_showStatsLocked = locked;
 }
 
 void CEngine::SetRenderEnable(bool enable)

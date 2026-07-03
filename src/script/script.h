@@ -29,6 +29,7 @@
 #include <memory>
 #include <limits>
 #include <string>
+#include <vector>
 #include <boost/optional.hpp>
 
 
@@ -66,6 +67,9 @@ public:
     void        PutScript(Ui::CEdit* edit, const char* name);
     bool        GetScript(Ui::CEdit* edit);
     bool        GetCompile();
+
+    //! Names of functions defined in the last successful compile (for autocompletion)
+    std::vector<std::string> GetFunctionNames();
 
     const std::string& GetTitle();
 

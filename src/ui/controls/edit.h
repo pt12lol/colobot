@@ -176,6 +176,15 @@ public:
     bool        ClearFormat();
     bool        SetFormat(int cursor1, int cursor2, int format);
 
+    void        ShowCompletion();
+    void        HideCompletion();
+    bool        UpdateCompletion();
+    void        DrawCompletion();
+    void        HandleCompletionSelect(const struct CompletionItem& item);
+    void        SetUserSymbols(const std::vector<std::string>& funcs);
+    std::string InferDeclaredType(const std::string& name);
+    std::vector<struct CompletionItem> CollectLocalVariables();
+
 protected:
     void        SendModifEvent();
     bool        IsLinkPos(Math::Point pos);
@@ -273,6 +282,12 @@ protected:
     bool        m_bUndoForce;
     OperUndo    m_undoOper;
     std::array<EditUndo, EDITUNDOMAX> m_undo;
+
+    std::unique_ptr<class CCodeCompletion> m_completion;
+    std::vector<struct CompletionItem> m_completionItems;
+    std::vector<struct CompletionItem> m_userSymbols;
+    int m_completionIndex;
+    int m_completionScroll;
 };
 
 

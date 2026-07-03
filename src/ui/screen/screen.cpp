@@ -22,6 +22,7 @@
 #include "app/app.h"
 
 #include "common/version.h"
+#include "common/build_stamp.h" // DEBUG | DEVELOPMENT | REMOVEME
 
 #include "graphics/engine/engine.h"
 
@@ -73,6 +74,21 @@ void CScreen::CreateVersionDisplay()
         CLabel* pl = pw->CreateLabel(pos, ddim, 0, EVENT_LABEL1, COLOBOT_VERSION_DISPLAY);
         pl->SetFontType(Gfx::FONT_STUDIO);
         pl->SetFontSize(9.0f);
+
+        // DEBUG | DEVELOPMENT | REMOVEME
+        // Build timestamp (bottom-left), regenerated on every build so it's easy
+        // to confirm a fresh binary is running after build-and-install.
+        Math::Point spos, sdim;
+        spos.x =  10.0f/640.0f;
+        spos.y =   7.0f/480.0f;
+        sdim.x = 200.0f/640.0f;
+        sdim.y =  28.0f/480.0f;
+        // Opaque background so the text stays readable over busy menu artwork.
+        pw->CreateGroup(spos, sdim, 1, EVENT_LABEL3);
+        CLabel* sl = pw->CreateLabel(spos, sdim, 0, EVENT_LABEL2, std::string("build ") + COLOBOT_BUILD_STAMP);
+        sl->SetFontType(Gfx::FONT_STUDIO);
+        sl->SetFontSize(9.0f);
+        // DEBUG | DEVELOPMENT | REMOVEME (end)
     }
 }
 

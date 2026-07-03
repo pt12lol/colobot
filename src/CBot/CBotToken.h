@@ -177,6 +177,11 @@ public:
      */
     static void ClearDefineNum();
 
+    /**
+     * \brief All constants defined with DefineNum() (for autocompletion)
+     */
+    static const std::map<std::string, long>& GetDefineNums();
+
 private:
     /**
      * \brief Find the next token in the string

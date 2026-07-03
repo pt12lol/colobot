@@ -191,6 +191,11 @@ void CBotToken::ClearDefineNum()
     m_defineNum.clear();
 }
 
+const std::map<std::string, long>& CBotToken::GetDefineNums()
+{
+    return m_defineNum;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 const CBotToken& CBotToken::operator=(const CBotToken& src)
 {

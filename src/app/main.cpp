@@ -32,6 +32,7 @@
 #include "common/profiler.h"
 #include "common/restext.h"
 #include "common/version.h"
+#include "common/build_stamp.h" // DEBUG | DEVELOPMENT | REMOVEME
 
 #include "common/resources/resourcemanager.h"
 
@@ -160,6 +161,7 @@ int main(int argc, char *argv[])
     #endif
 
     logger.Info("%s starting\n", COLOBOT_FULLNAME);
+    logger.Info("Build timestamp: %s\n", COLOBOT_BUILD_STAMP); // DEBUG | DEVELOPMENT | REMOVEME
 
     CSignalHandlers::Init(systemUtils.get());
 

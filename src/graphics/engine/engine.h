@@ -647,6 +647,8 @@ public:
     //! Management of displaying statistic information
     void            SetShowStats(bool show);
     bool            GetShowStats();
+    //! When locked, F11/F12 no longer toggle the stats overlay (so the editor can use F12)
+    void            SetShowStatsLocked(bool locked);
     //@}
 
     //! Enables/disables rendering
@@ -1317,6 +1319,7 @@ protected:
 
     //! Whether to show stats (FPS, etc)
     bool            m_showStats;
+    bool            m_showStatsLocked = false;
     //! Rendering enabled?
     bool            m_render;
     //! Render / hide the UI?

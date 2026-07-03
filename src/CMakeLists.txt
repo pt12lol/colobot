@@ -376,6 +376,8 @@ add_library(colobotbase STATIC
     ui/controls/check.h
     ui/controls/color.cpp
     ui/controls/color.h
+    ui/controls/code_completion.cpp
+    ui/controls/code_completion.h
     ui/controls/control.cpp
     ui/controls/control.h
     ui/controls/edit.cpp
@@ -475,6 +477,19 @@ target_include_directories(colobotbase PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/..
     ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+# DEBUG | DEVELOPMENT | REMOVEME
+# Build timestamp regenerated on every build (custom targets are always
+# out-of-date), so screen.cpp recompiles and the menu shows the fresh build time.
+set(BUILD_STAMP_HEADER ${CMAKE_CURRENT_BINARY_DIR}/common/build_stamp.h)
+set(BUILD_STAMP_TXT ${CMAKE_CURRENT_BINARY_DIR}/common/build_stamp.txt)
+add_custom_target(colobot_build_stamp
+    COMMAND ${CMAKE_COMMAND} -DOUT=${BUILD_STAMP_HEADER} -DTXT=${BUILD_STAMP_TXT} -P ${CMAKE_CURRENT_LIST_DIR}/common/GenerateBuildStamp.cmake
+    BYPRODUCTS ${BUILD_STAMP_HEADER} ${BUILD_STAMP_TXT}
+    COMMENT "Generating build timestamp"
+    VERBATIM)
+add_dependencies(colobotbase colobot_build_stamp)
+# DEBUG | DEVELOPMENT | REMOVEME (end)
 
 # Main libraries
 target_link_libraries(colobotbase PUBLIC
@@ -601,12 +616,18 @@ add_custom_target(install-bin
     VERBATIM)
 add_dependencies(install-bin colobot)
 
-# One-shot: (re)build the executable on all cores, then swap it into the system.
-# Its two dependencies are the build (colobot) and the install (install-bin);
-# install-bin's own dependency on colobot guarantees install runs after build,
-# even under parallel make (e.g. cmake --build build -j8 --target build-and-install).
-add_custom_target(build-and-install)
-add_dependencies(build-and-install colobot install-bin)
+# One-shot dev loop: (re)build on all cores, swap into the system, then launch
+# the freshly installed game. Dependencies are the build (colobot) and the
+# install (install-bin); install-bin's own dependency on colobot guarantees
+# install runs after build, even under parallel make. The COMMANDs run after
+# both dependencies: print the build timestamp, then run colobot.
+# (For a plain rebuild+install without launching, use the install-bin target.)
+add_custom_target(build-install-run
+    # DEBUG | DEVELOPMENT | REMOVEME (next COMMAND line only - prints build timestamp)
+    COMMAND ${CMAKE_COMMAND} -DTXT=${BUILD_STAMP_TXT} -P ${CMAKE_CURRENT_LIST_DIR}/common/PrintBuildStamp.cmake
+    COMMAND ${COLOBOT_INSTALL_BIN_DIR}/colobot
+    VERBATIM)
+add_dependencies(build-install-run colobot install-bin)
 
 # Linter-specific
 if(COLOBOT_LINT_BUILD)

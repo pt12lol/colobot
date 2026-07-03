@@ -21,6 +21,7 @@
 #include "script/script.h"
 
 #include "CBot/CBot.h"
+#include "CBot/CBotInstr/CBotFunction.h"
 
 #include "common/restext.h"
 #include "common/stringutils.h"
@@ -137,6 +138,18 @@ bool CScript::GetScript(Ui::CEdit* edit)
 bool CScript::GetCompile()
 {
     return m_bCompile;
+}
+
+std::vector<std::string> CScript::GetFunctionNames()
+{
+    std::vector<std::string> names;
+    if (m_botProg == nullptr) return names;
+    for (CBot::CBotFunction* func : m_botProg->GetFunctions())
+    {
+        if (func == nullptr) continue;
+        names.push_back(func->GetName());
+    }
+    return names;
 }
 
 // Indicates whether the program is empty.

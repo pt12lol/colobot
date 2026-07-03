@@ -192,7 +192,13 @@ bool CStudio::EventProcess(const Event &event)
     }
     if ( event.type == EVENT_STUDIO_HELP )  // help?
     {
-        m_main->StartDisplayInfo(SATCOM_PROG, false);
+        // Jump straight to the doc page of the token under the cursor (F12 /
+        // help button); fall back to the general programming help if none.
+        SearchToken(edit);  // resolve m_helpFilename for the current caret position
+        if ( !m_helpFilename.empty() )
+            m_main->StartDisplayInfo(m_helpFilename, -1);
+        else
+            m_main->StartDisplayInfo(SATCOM_PROG, false);
     }
 
     if ( event.type == EVENT_STUDIO_COMPILE )  // compile?
@@ -202,6 +208,7 @@ bool CStudio::EventProcess(const Event &event)
             std::string res;
             GetResource(RES_TEXT, RT_STUDIO_COMPOK, res);
             SetInfoText(res, false);
+            edit->SetUserSymbols(m_script->GetFunctionNames());  // refresh autocompletion
         }
         else
         {
@@ -222,6 +229,7 @@ bool CStudio::EventProcess(const Event &event)
             if ( m_script->GetScript(edit) )  // compile
             {
                 SetInfoText("", false);
+                edit->SetUserSymbols(m_script->GetFunctionNames());  // refresh autocompletion
 
                 m_event->AddEvent(Event(EVENT_OBJECT_PROGSTART));
             }
@@ -568,6 +576,7 @@ void CStudio::StartEditScript(CScript *script, std::string name, Program* progra
     m_program = program;
 
     m_main->SetActiveStudio(this);
+    m_engine->SetShowStatsLocked(true);  // free up F12 for the editor's "jump to docs"
     m_main->SetEditLock(true, true);
     m_main->SetEditFull(false);
     m_main->SetSpeed(1.0f);
@@ -934,6 +943,7 @@ bool CStudio::StopEditScript(bool closeWithErrors)
     m_runningPause = nullptr;
     m_main->SetEditLock(false, true);
     m_main->SetActiveStudio(nullptr);
+    m_engine->SetShowStatsLocked(false);  // restore F11/F12 stats toggle outside the editor
     m_camera->SetType(m_editCamera);
 
     m_settings->SetIOPos(m_dialogPos);
