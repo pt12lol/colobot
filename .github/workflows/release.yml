@@ -1,0 +1,68 @@
+name: release
+
+# Builds relocatable Colobot (fork) packages for the distros the installer
+# supports and attaches them (plus sha256 sums) to the GitHub Release of the
+# pushed tag. Build happens inside the target distro's Docker image so the
+# binaries link against that distro's libraries.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-22.04
+            image: ubuntu:22.04
+          - name: debian-trixie
+            image: debian:trixie
+    steps:
+      - name: Checkout (with data submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build inside ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD":/src -w /src ${{ matrix.image }} bash -c '
+            set -eux
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y \
+              build-essential cmake git \
+              libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev \
+              libsndfile1-dev libvorbis-dev libogg-dev libpng-dev \
+              libglew-dev libopenal-dev \
+              libboost-dev libboost-system-dev libboost-filesystem-dev libboost-regex-dev \
+              libphysfs-dev gettext po4a vorbis-tools
+            cmake -S . -B build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/src/stage/colobot-fork \
+              -DMUSIC=ON
+            cmake --build build -j"$(nproc)"
+            cmake --install build
+          '
+
+      - name: Package
+        run: |
+          ASSET="colobot-fork-${{ matrix.name }}-x86_64.tar.gz"
+          tar -C stage -czf "$ASSET" colobot-fork
+          sha256sum "$ASSET" > "$ASSET.sha256"
+          ls -lh "$ASSET"*
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            colobot-fork-${{ matrix.name }}-x86_64.tar.gz
+            colobot-fork-${{ matrix.name }}-x86_64.tar.gz.sha256

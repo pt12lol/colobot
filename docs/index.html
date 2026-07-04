@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pl" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Colobot (fork)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --brand: #ffb300; }
+    body {
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(255,179,0,.12), transparent 60%),
+        radial-gradient(900px 500px at -10% 20%, rgba(13,110,253,.12), transparent 55%),
+        radial-gradient(1000px 600px at 100% 108%, rgba(34,197,94,.13), transparent 55%),
+        #0d1117;
+      min-height: 100vh;
+    }
+    .brand-glow { filter: drop-shadow(0 0 24px rgba(255,179,0,.35)); }
+    .hero-title { font-weight: 800; letter-spacing: -.02em; }
+    .text-brand { color: var(--brand) !important; }
+    .space {
+      background: linear-gradient(90deg, #7b61ff 0%, #46b1ff 55%, #00e0c6 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      font-style: italic; font-weight: 800;
+      text-shadow: 0 0 30px rgba(70,177,255,.35);
+    }
+    /* The "fork layer": terminal-green gradient + monospace = the modern coding side. */
+    .fork-accent {
+      color: #22c55e;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      text-shadow: 0 0 22px rgba(34,197,94,.25);
+    }
+    .fork-cursor {
+      display: inline-block; width: .55em; height: 1.05em;
+      background: #22c55e; margin-left: .06em; vertical-align: -.16em;
+      animation: blink 1s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    #preloader {
+      position: fixed; inset: 0; background: #0d1117; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .45s ease;
+    }
+    .cmd-box { background:#010409; border:1px solid #30363d; border-radius:.75rem;
+               font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .cmd-box code { color:#e6edf3; white-space:nowrap; }
+    .cmd-box .t-cmd  { color:#3fb950; }
+    .cmd-box .t-flag { color:#8b949e; }
+    .cmd-box .t-url  { color:#58a6ff; text-decoration:underline; }
+    .cmd-box .t-arg  { color:#d2a8ff; }
+    .cmd-box .prompt { color:#22d3ee; user-select:none; -webkit-user-select:none; }
+    .cmd-scroll { overflow-x:auto; }
+    .card { background: rgba(22,27,34,.7); border:1px solid #30363d; backdrop-filter: blur(6px); }
+    .feature-icon { font-size:1.4rem; }
+    .platform-badge { font-size:.8rem; }
+    a { text-decoration:none; }
+    .footer-note { color:#8b949e; }
+    .nav-pills .nav-link { color:#e6edf3; }
+    .nav-pills .nav-link.active { background-color: var(--brand); color:#1a1a1a; }
+    .installer-card { border:1px solid var(--brand); box-shadow: 0 0 36px rgba(255,179,0,.18); }
+    .lang-switch { position:absolute; top:1rem; right:1rem; z-index:5; }
+  </style>
+</head>
+<body>
+<div id="preloader"><div class="spinner-border text-warning" role="status"></div></div>
+<div class="container py-4" style="max-width: 960px;">
+
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <ul class="nav nav-pills">
+      <li class="nav-item"><a class="nav-link active" href="index.html" data-i18n="tab_install"></a></li>
+      <li class="nav-item"><a class="nav-link" href="features.html" data-i18n="tab_features"></a></li>
+    </ul>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Language">
+      <input type="radio" class="btn-check" name="lang" id="langPl" value="pl">
+      <label class="btn btn-outline-warning" for="langPl">&#127477;&#127473; PL</label>
+      <input type="radio" class="btn-check" name="lang" id="langEn" value="en">
+      <label class="btn btn-outline-warning" for="langEn">&#127468;&#127463; EN</label>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <header class="text-center mb-4 pt-2">
+    <h1 class="hero-title display-3 text-brand mb-3">
+      <img src="colobot.svg" alt="C" class="brand-glow" style="height:1.05em;vertical-align:-.22em;margin-right:-.04em;"><span style="position:relative;top:.08em;">olobot <span class="fork-accent" id="forkType"></span><span class="fork-cursor" id="forkCursor"></span></span>
+    </h1>
+    <p class="lead fs-4 fw-semibold mb-3" data-i18n="tagline"></p>
+    <a class="badge rounded-pill text-bg-secondary fs-5 fw-normal px-4 py-2 repo-link" href="https://github.com/pt12lol/colobot/tree/mine"
+       target="_blank" rel="noopener"><span data-i18n="badge_unofficial"></span></a>
+    <a class="badge rounded-pill text-bg-dark border fs-5 fw-normal px-4 py-2 repo-link" href="https://github.com/colobot/colobot"
+       target="_blank" rel="noopener"><span data-i18n="badge_forked"></span></a>
+    <div class="mt-3">
+      <a href="features.html" class="link-warning fw-semibold fs-5" data-i18n="feat_link"></a>
+    </div>
+  </header>
+
+  <!-- Installer -->
+  <div class="card installer-card p-4 mb-4">
+    <h2 class="h4 mb-4" data-i18n="install_h"></h2>
+
+    <div class="row g-4 mb-4">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold small text-uppercase text-secondary d-block" data-i18n="lbl_mode"></label>
+        <div class="btn-group w-100" role="group">
+          <input type="radio" class="btn-check" name="mode" id="modePrebuilt" value="prebuilt" checked>
+          <label class="btn btn-outline-warning" for="modePrebuilt" data-i18n="mode_prebuilt"></label>
+          <input type="radio" class="btn-check" name="mode" id="modeSource" value="source">
+          <label class="btn btn-outline-warning" for="modeSource" data-i18n="mode_source"></label>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold small text-uppercase text-secondary d-block" data-i18n="lbl_scope"></label>
+        <div class="btn-group w-100" role="group">
+          <input type="radio" class="btn-check" name="scope" id="scopeUser" value="user" checked>
+          <label class="btn btn-outline-warning" for="scopeUser" data-i18n="scope_user"></label>
+          <input type="radio" class="btn-check" name="scope" id="scopeSystem" value="system">
+          <label class="btn btn-outline-warning" for="scopeSystem" data-i18n="scope_system"></label>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold small text-uppercase text-secondary d-block" data-i18n="lbl_music"></label>
+        <input type="checkbox" class="btn-check" id="musicSwitch" checked>
+        <label class="btn btn-outline-warning w-100 d-inline-flex align-items-center justify-content-center gap-2" for="musicSwitch">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.895 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>
+          <span data-i18n="music_pack"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-end mb-1">
+      <label class="form-label fw-semibold small text-uppercase text-secondary mb-0" data-i18n="lbl_paste"></label>
+      <div class="btn-group btn-group-sm" role="group" aria-label="downloader">
+        <input type="radio" class="btn-check" name="dl" id="dlCurl" value="curl" checked>
+        <label class="btn btn-outline-warning" for="dlCurl">curl</label>
+        <input type="radio" class="btn-check" name="dl" id="dlWget" value="wget">
+        <label class="btn btn-outline-warning" for="dlWget">wget</label>
+      </div>
+    </div>
+    <div class="cmd-box p-3" style="position:relative;">
+      <div class="cmd-scroll" style="padding-right:7rem;"><span class="prompt">$</span> <code id="cmd"></code></div>
+      <button class="btn btn-outline-warning fw-semibold d-inline-flex align-items-center gap-1" id="copyBtn"
+              style="position:absolute; top:.5rem; right:.5rem; white-space:nowrap; font-size:.82rem; padding:.28rem .6rem;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/>
+          <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/>
+        </svg>
+        <span id="copyLabel"></span>
+      </button>
+    </div>
+    <p class="text-secondary small mt-2 mb-0" id="sudoNote"></p>
+  </div>
+
+  <!-- Platforms -->
+  <div class="card p-4 mb-4">
+    <h6 class="mb-3" data-i18n="plat_h"></h6>
+    <ul class="list-group list-group-flush">
+      <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+        <span>Ubuntu 22.04 <span class="text-secondary small">x86_64</span></span>
+        <span class="badge text-bg-success">&#10003; <span data-i18n="plat_verified"></span></span>
+      </li>
+      <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+        <span>Debian Trixie <span class="text-secondary small">x86_64</span></span>
+        <span class="badge text-bg-success">&#10003; <span data-i18n="plat_verified"></span></span>
+      </li>
+      <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+        <span><span data-i18n="plat_apt"></span> <span class="text-secondary small" data-i18n="plat_apt_ex"></span></span>
+        <span class="badge text-bg-secondary" data-i18n="plat_maybe"></span>
+      </li>
+      <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+        <span data-i18n="plat_other"></span>
+        <span class="badge text-bg-secondary" data-i18n="plat_deps"></span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Footer -->
+  <footer class="text-center footer-note small">
+    <p class="mb-1" data-i18n="footer_by"></p>
+    <p class="mb-1">
+      <span data-i18n="footer_code_label"></span>:
+      <a class="repo-link" href="https://github.com/pt12lol/colobot/tree/mine" target="_blank" rel="noopener">pt12lol/colobot</a>
+      &#183; <span data-i18n="footer_orig_label"></span>:
+      <a class="repo-link" href="https://github.com/colobot/colobot" target="_blank" rel="noopener">colobot/colobot</a>
+      &#183; <a href="https://colobot.info" target="_blank" rel="noopener">colobot.info</a>
+      &#183; GPL-3.0
+    </p>
+    <p class="mb-0 text-secondary" data-i18n="footer_trademark"></p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const I18N = {
+    pl: {
+      logo_title: "Oryginalny projekt Colobot na GitHubie",
+      tagline: 'Zamień naukę <span class="fork-accent">nowoczesnego programowania</span> w <span class="text-brand">kosmiczną przygodę</span>.',
+      badge_unofficial: "nieoficjalny fork",
+      badge_forked: "forkowany z colobot/colobot",
+      feat_link: "Zobacz co wyróżnia tego forka &rarr;",
+      tab_install: "Instalacja",
+      tab_features: "O tym forku",
+      install_h: "Instalacja &#8212; jedna komenda",
+      lbl_mode: "Tryb", mode_prebuilt: "Gotowa binarka", mode_source: "Ze źródeł",
+      lbl_scope: "Zakres", scope_user: "Tylko ja", scope_system: "Cały system",
+      lbl_music: "Muzyka", music_pack: "Pakiet muzyczny",
+      lbl_paste: "Wklej w terminal", copy: "Kopiuj", copied: "Skopiowano!",
+      note_user: "Zero sudo - instalacja do ~/.local, nic poza Twoim katalogiem domowym nie jest ruszane.",
+      note_source: "Bez sudo dla samej gry (instalacja do ~/.local); sudo tylko do apt (zależności budowania).",
+      note_system: "Komenda nie odpala roota; skrypt sam poprosi o sudo tylko przy zapisie do /opt i /usr/local.",
+      feat1_h: "Autouzupełnianie",
+      feat1_d: "Ctrl+Space i po kropce: funkcje, typy, pola obiektu, Twoje zmienne i stałe - z kolorami jak w kodzie.",
+      feat2_h: "F12 &rarr; dokumentacja",
+      feat2_d: "Kursor na <code>radar</code> czy <code>TitaniumOre</code> + F12 = strona pomocy tego elementu.",
+      feat3_h: "Sync z edytorem",
+      feat3_d: "Edytuj programy robotów w zewnętrznym edytorze (np. VS Code) - zmiany wracają do gry.",
+      plat_h: "Wspierane platformy",
+      plat_verified: "Zweryfikowane",
+      plat_apt: "Dowolny Debian/Ubuntu (apt)",
+      plat_apt_ex: "np. Ubuntu 20.04+/24.04, Mint, Pop!_OS",
+      plat_maybe: "powinno działać",
+      plat_other: "Inne (Fedora, Arch, ...)",
+      plat_deps: "zależności doinstaluj sam",
+      footer_by: "Fork rozwijany przez <a class='text-brand' href='https://github.com/pt12lol' target='_blank' rel='noopener'>pt12lol</a>.",
+      footer_code_label: "Kod", footer_orig_label: "oryginał",
+      footer_trademark: "Colobot to projekt Epsitec SA & TerranovaTeam. To niezależny, nieoficjalny fork."
+    },
+    en: {
+      logo_title: "The original Colobot project on GitHub",
+      tagline: 'Turn learning <span class="fork-accent">modern programming</span> into <span class="text-brand">a space adventure</span>.',
+      badge_unofficial: "unofficial fork",
+      badge_forked: "forked from colobot/colobot",
+      feat_link: "See what makes this fork different &rarr;",
+      tab_install: "Install",
+      tab_features: "About this fork",
+      install_h: "Install &#8212; one command",
+      lbl_mode: "Mode", mode_prebuilt: "Prebuilt binary", mode_source: "From source",
+      lbl_scope: "Scope", scope_user: "Just me", scope_system: "System-wide",
+      lbl_music: "Music", music_pack: "Music pack",
+      lbl_paste: "Paste into a terminal", copy: "Copy", copied: "Copied!",
+      note_user: "No sudo at all - installs into ~/.local, nothing outside your home is touched.",
+      note_source: "No sudo for the game itself (installs into ~/.local); sudo only for apt (build dependencies).",
+      note_system: "The command never runs as root; the script asks for sudo only to write to /opt and /usr/local.",
+      feat1_h: "Autocomplete",
+      feat1_d: "Ctrl+Space and after a dot: functions, types, object fields, your variables and constants - colored like the code.",
+      feat2_h: "F12 &rarr; docs",
+      feat2_d: "Caret on <code>radar</code> or <code>TitaniumOre</code> + F12 = that element's help page.",
+      feat3_h: "External editor sync",
+      feat3_d: "Edit robot programs in an external editor (e.g. VS Code) - changes flow back into the game.",
+      plat_h: "Supported Platforms",
+      plat_verified: "Verified",
+      plat_apt: "Any Debian/Ubuntu (apt)",
+      plat_apt_ex: "e.g. Ubuntu 20.04+/24.04, Mint, Pop!_OS",
+      plat_maybe: "should work",
+      plat_other: "Other (Fedora, Arch, ...)",
+      plat_deps: "install deps yourself",
+      footer_by: "A fork by <a class='text-brand' href='https://github.com/pt12lol' target='_blank' rel='noopener'>pt12lol</a>.",
+      footer_code_label: "Code", footer_orig_label: "original",
+      footer_trademark: "Colobot is a project by Epsitec SA & TerranovaTeam. This is an independent, unofficial fork."
+    }
+  };
+
+  const URL = "https://pt12lol.github.io/colobot/install.sh";
+  let lang = "en";
+  let plainCmd = "";  // single-line command for copying (display may be wrapped with "\")
+  const cmdEl = document.getElementById("cmd");
+  const sudoNote = document.getElementById("sudoNote");
+  const copyBtn = document.getElementById("copyBtn");
+  const copyLabel = document.getElementById("copyLabel");
+
+  function build() {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    const scope = document.querySelector('input[name="scope"]:checked').value;
+    const music = document.getElementById("musicSwitch").checked;
+    const dl = document.querySelector('input[name="dl"]:checked').value;
+    const cmd = dl === "wget" ? "wget" : "curl";
+    const cf = dl === "wget" ? "-qO-" : "-sSf";
+    const flags = [];
+    if (mode === "source") flags.push("--source");
+    if (scope === "system") flags.push("--system");
+    if (!music) flags.push("--no-music");
+    // Colored display; when there are extra flags the line is wrapped with a "\"
+    // continuation so it fits the box. Copy uses plainCmd (single line, no "\").
+    const head = `<span class="t-cmd">${cmd}</span> <span class="t-flag">${cf}</span> `
+               + `<span class="t-url">${URL}</span> <span class="t-pipe">|</span>`;
+    if (flags.length) {
+      const args = flags.join(" ");
+      cmdEl.innerHTML = `${head} <span class="t-flag">\\</span><br>`
+        + `&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-cmd">sh</span> <span class="t-flag">-s --</span> <span class="t-arg">${args}</span>`;
+      plainCmd = `${cmd} ${cf} ${URL} | sh -s -- ${args}`;
+    } else {
+      cmdEl.innerHTML = `${head} <span class="t-cmd">sh</span>`;
+      plainCmd = `${cmd} ${cf} ${URL} | sh`;
+    }
+
+    const t = I18N[lang];
+    sudoNote.textContent = scope === "system" ? t.note_system
+                         : mode === "source" ? t.note_source : t.note_user;
+  }
+
+  function setLang(l) {
+    lang = (l === "pl") ? "pl" : "en";
+    document.documentElement.lang = lang;
+    const t = I18N[lang];
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      const k = el.getAttribute("data-i18n");
+      if (t[k] !== undefined) el.innerHTML = t[k];
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach(el => {
+      const k = el.getAttribute("data-i18n-title");
+      if (t[k] !== undefined) el.title = t[k];
+    });
+    copyLabel.textContent = t.copy;
+    document.getElementById(lang === "pl" ? "langPl" : "langEn").checked = true;
+    try { localStorage.setItem("colobot-fork-lang", lang); } catch (e) {}
+    build();
+  }
+
+  document.querySelectorAll('input[name="mode"], input[name="scope"], #musicSwitch, input[name="dl"]')
+    .forEach(el => el.addEventListener("change", build));
+  document.querySelectorAll('input[name="lang"]')
+    .forEach(el => el.addEventListener("change", () => setLang(el.value)));
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(plainCmd);
+      const old = copyLabel.textContent;
+      copyLabel.textContent = I18N[lang].copied;
+      setTimeout(() => copyLabel.textContent = old, 1500);
+    } catch (e) {
+      const r = document.createRange(); r.selectNode(cmdEl);
+      window.getSelection().removeAllRanges(); window.getSelection().addRange(r);
+    }
+  });
+
+  // Default: saved choice, else system language.
+  let saved = null;
+  try { saved = localStorage.getItem("colobot-fork-lang"); } catch (e) {}
+  const sys = (navigator.language || "en").toLowerCase().startsWith("pl") ? "pl" : "en";
+  setLang(saved || sys);
+
+  // GitHub mark prepended to every repo link (emoji fonts are unreliable on Linux).
+  const GH = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:-.15em;margin-right:.35em"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.02-1.49-2.01.44-2.43-.97-2.43-.97-.33-.83-.8-1.05-.8-1.05-.66-.45.05-.44.05-.44.73.05 1.11.75 1.11.75.65 1.11 1.71.79 2.13.6.07-.47.25-.79.46-.97-1.6-.18-3.29-.8-3.29-3.56 0-.79.28-1.43.75-1.94-.08-.18-.33-.92.07-1.92 0 0 .61-.2 2 .74.58-.16 1.2-.24 1.82-.24.62 0 1.24.08 1.82.24 1.39-.94 2-.74 2-.74.4 1 .15 1.74.07 1.92.47.51.75 1.15.75 1.94 0 2.77-1.69 3.38-3.3 3.56.26.22.49.66.49 1.33 0 .96-.01 1.74-.01 1.97 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
+  document.querySelectorAll(".repo-link").forEach(a => a.insertAdjacentHTML("afterbegin", GH));
+
+  // Reveal only once everything is loaded, then type out "(fork)" like a terminal.
+  window.addEventListener("load", () => {
+    const pre = document.getElementById("preloader");
+    if (pre) { pre.style.opacity = "0"; setTimeout(() => pre.remove(), 450); }
+    const target = document.getElementById("forkType");
+    const text = "(fork)";
+    let i = 0;
+    function type() {
+      target.textContent = text.slice(0, i);
+      if (i++ < text.length) setTimeout(type, 150);
+    }
+    setTimeout(type, 1100);  // let the reveal settle before typing starts
+  });
+</script>
+</body>
+</html>
