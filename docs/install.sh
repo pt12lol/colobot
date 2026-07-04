@@ -25,15 +25,30 @@ MODE="prebuilt"     # prebuilt | source
 SCOPE="user"        # user | system
 MUSIC="1"
 TAG="latest"
+UNINSTALL="0"
+
+print_help() {
+    cat <<'EOF'
+Colobot (fork) installer - https://pt12lol.github.io/colobot/
+
+  --source        build from source instead of downloading a prebuilt package
+  --system        install for all users (/opt + /usr/local/bin, uses sudo)
+  --no-music      skip the (large) music pack
+  --tag <tag>     install a specific release tag (default: latest)
+  --uninstall     remove a previous installation
+  --help          show this help
+EOF
+}
 
 # ---- args --------------------------------------------------------------------
 while [ $# -gt 0 ]; do
     case "$1" in
-        --source)   MODE="source" ;;
-        --system)   SCOPE="system" ;;
-        --no-music) MUSIC="0" ;;
-        --tag)      shift; TAG="${1:-latest}" ;;
-        --help|-h)  sed -n '2,20p' "$0" 2>/dev/null || true; exit 0 ;;
+        --source)    MODE="source" ;;
+        --system)    SCOPE="system" ;;
+        --no-music)  MUSIC="0" ;;
+        --tag)       shift; TAG="${1:-latest}" ;;
+        --uninstall) UNINSTALL="1" ;;
+        --help|-h)   print_help; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -92,6 +107,21 @@ SAVEDIR="${HOME}/.local/share/${APP}/saves"
 # run helper that respects SCOPE
 priv() { if [ -n "$RUN" ]; then $RUN "$@"; else "$@"; fi; }
 
+# Only ever wipe a path that actually looks like our install dir.
+wipe_prefix() {
+    case "$PREFIX" in
+        */colobot-fork) priv rm -rf "$PREFIX" ;;
+        *) die "Refusing to remove unexpected path: '$PREFIX'" ;;
+    esac
+}
+
+uninstall() {
+    say "Removing ${APP} from ${PREFIX}"
+    wipe_prefix
+    priv rm -f "${BINDIR}/${APP}" "${APPSDIR}/${APP}.desktop" "${ICONDIR}/${APP}.svg"
+    say "Uninstalled. (Saves in ${SAVEDIR} were left untouched.)"
+}
+
 # ---- launcher + desktop entry (shared by both modes) ------------------------
 install_launcher() {
     say "Creating launcher '${APP}' and menu entry"
@@ -148,12 +178,24 @@ install_prebuilt() {
     trap 'rm -rf "$tmp"' EXIT
     if command -v curl >/dev/null 2>&1; then
         curl -fSL "$url" -o "${tmp}/pkg.tar.gz" || die "Download failed: ${url}"
+        curl -fsSL "${url}.sha256" -o "${tmp}/pkg.sha256" 2>/dev/null || true
     else
         wget -O "${tmp}/pkg.tar.gz" "$url" || die "Download failed: ${url}"
+        wget -qO "${tmp}/pkg.sha256" "${url}.sha256" 2>/dev/null || true
+    fi
+
+    # Verify integrity against the published checksum (best-effort).
+    if [ -s "${tmp}/pkg.sha256" ] && command -v sha256sum >/dev/null 2>&1; then
+        expected="$(cut -d' ' -f1 "${tmp}/pkg.sha256")"
+        actual="$(sha256sum "${tmp}/pkg.tar.gz" | cut -d' ' -f1)"
+        [ "$expected" = "$actual" ] || die "Checksum mismatch - refusing to install."
+        say "Checksum OK"
+    else
+        warn "Skipping checksum verification (no .sha256 or sha256sum)."
     fi
 
     say "Installing to ${PREFIX}"
-    priv rm -rf "$PREFIX"
+    wipe_prefix
     priv mkdir -p "$PREFIX"
     # Tarball root is the prefix tree (games/, lib/, share/) - strip the top dir.
     priv tar -xzf "${tmp}/pkg.tar.gz" -C "$PREFIX" --strip-components=1
@@ -195,13 +237,18 @@ install_source() {
     cmake --build "${tmp}/build" -j"$(nproc 2>/dev/null || echo 2)"
 
     say "Installing to ${PREFIX}"
-    priv rm -rf "$PREFIX"
+    wipe_prefix
     priv cmake --install "${tmp}/build"
 
     install_launcher
 }
 
 # ---- go ----------------------------------------------------------------------
+if [ "$UNINSTALL" = "1" ]; then
+    say "Colobot (fork) uninstaller (scope: ${SCOPE})"
+    uninstall
+    exit 0
+fi
 say "Colobot (fork) installer - mode: ${MODE}, scope: ${SCOPE}, music: ${MUSIC}"
 if [ "$MODE" = "source" ]; then
     install_source
