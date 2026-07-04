@@ -122,6 +122,31 @@ uninstall() {
     say "Uninstalled. (Saves in ${SAVEDIR} were left untouched.)"
 }
 
+# Offer to copy saves from an existing (e.g. apt) Colobot into the fork's
+# save dir. Only when the fork has none yet. Prompt reads /dev/tty because
+# under `curl | sh` stdin is the script; defaults to yes.
+maybe_import_saves() {
+    orig="${XDG_DATA_HOME:-$HOME/.local/share}/colobot"
+    [ -d "$orig" ] || return 0
+    [ -d "$SAVEDIR" ] && [ -n "$(ls -A "$SAVEDIR" 2>/dev/null)" ] && return 0
+
+    ans="y"
+    if [ -r /dev/tty ]; then
+        printf '\033[1;36m??\033[0m Found existing Colobot saves in %s. Copy them into the fork? [Y/n] ' "$orig" > /dev/tty
+        read ans < /dev/tty || ans="y"
+    fi
+    case "${ans:-y}" in
+        [Nn]*) say "Keeping the fork's saves separate." ;;
+        *)
+            mkdir -p "$SAVEDIR"
+            if cp -r "$orig/." "$SAVEDIR/" 2>/dev/null; then
+                say "Saves copied. (If a level looks locked, the save format may differ between versions.)"
+            else
+                warn "Could not copy saves from ${orig}."
+            fi ;;
+    esac
+}
+
 # ---- launcher + desktop entry (shared by both modes) ------------------------
 install_launcher() {
     say "Creating launcher '${APP}' and menu entry"
@@ -255,6 +280,8 @@ if [ "$MODE" = "source" ]; then
 else
     install_prebuilt
 fi
+
+maybe_import_saves
 
 echo
 say "Done. Launch it from your applications menu, or run: ${APP}"
