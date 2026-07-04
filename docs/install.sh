@@ -74,20 +74,36 @@ as_root() {
 }
 
 # ---- detect distro -----------------------------------------------------------
+# Pick the prebuilt package family for this system. Debian/Ubuntu and close
+# relatives all get a best-effort package - it usually just works.
 detect_distro() {
-    [ -r /etc/os-release ] || die "Cannot read /etc/os-release - unsupported system."
+    [ -r /etc/os-release ] || return 1
     # shellcheck disable=SC1091
     . /etc/os-release
-    case "${ID:-}:${VERSION_ID:-}" in
-        ubuntu:22.04) echo "ubuntu-22.04" ;;
-        debian:*)
-            # Trixie may report "13" or "trixie" depending on the release stage
-            case "${VERSION_CODENAME:-}${VERSION_ID:-}" in
-                *trixie*|*13*) echo "debian-trixie" ;;
-                *) echo "" ;;
-            esac ;;
-        *) echo "" ;;
+    case "${ID:-}" in
+        ubuntu|linuxmint|pop|elementary|zorin|neon|tuxedo|ubuntu-*) echo "ubuntu-24.04"; return 0 ;;
+        debian|raspbian|devuan|kali|mx|deepin) echo "debian-trixie"; return 0 ;;
     esac
+    # derivatives declare their base in ID_LIKE (e.g. "ubuntu debian")
+    case " ${ID_LIKE:-} " in
+        *ubuntu*) echo "ubuntu-24.04"; return 0 ;;
+        *debian*) echo "debian-trixie"; return 0 ;;
+    esac
+    return 1
+}
+
+# True only for the exact systems the packages are built and tested on.
+is_verified_system() {
+    [ -r /etc/os-release ] || return 1
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    [ "${ID:-}:${VERSION_ID:-}" = "ubuntu:24.04" ] && return 0
+    if [ "${ID:-}" = "debian" ]; then
+        case ":${VERSION_CODENAME:-}:${VERSION_ID:-}:" in
+            *:trixie:*|*:13:*) return 0 ;;
+        esac
+    fi
+    return 1
 }
 
 arch_ok() { [ "$(uname -m)" = "x86_64" ]; }
@@ -211,7 +227,13 @@ EOF
 install_prebuilt() {
     arch_ok || die "Prebuilt packages are x86_64 only. Try: ... | sh -s -- --source"
     distro="$(detect_distro)"
-    [ -n "$distro" ] || die "No prebuilt package for this distro. Try: ... | sh -s -- --source"
+    [ -n "$distro" ] || die "No prebuilt package for this system. Re-run with:  ... | sh -s -- --source"
+
+    if ! is_verified_system; then
+        warn "This isn't a system we've tested (Ubuntu 24.04 / Debian Trixie)."
+        warn "Installing the closest package (${distro}) - it might not run here."
+        warn "If the game doesn't start, nothing breaks - just remove it with --uninstall."
+    fi
 
     suffix=""
     [ "$MUSIC" = "0" ] && suffix="-nomusic"
