@@ -26,6 +26,8 @@ SCOPE="user"        # user | system
 MUSIC="1"
 TAG="latest"
 UNINSTALL="0"
+FORCE="0"
+VERSION_FILE=".fork-version"   # stamped inside PREFIX to detect install/update
 
 print_help() {
     cat <<'EOF'
@@ -35,6 +37,7 @@ Colobot (fork) installer - https://pt12lol.github.io/colobot/
   --system        install for all users (/opt + /usr/local/bin, uses sudo)
   --no-music      skip the (large) music pack
   --tag <tag>     install a specific release tag (default: latest)
+  --force         reinstall even if already up to date
   --uninstall     remove a previous installation
   --help          show this help
 EOF
@@ -47,6 +50,7 @@ while [ $# -gt 0 ]; do
         --system)    SCOPE="system" ;;
         --no-music)  MUSIC="0" ;;
         --tag)       shift; TAG="${1:-latest}" ;;
+        --force)     FORCE="1" ;;
         --uninstall) UNINSTALL="1" ;;
         --help|-h)   print_help; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -102,7 +106,7 @@ else
     ICONDIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
     RUN=""   # plain, no privilege escalation
 fi
-SAVEDIR="${HOME}/.local/share/${APP}/saves"
+SAVEDIR="${HOME}/.local/share/${APP}-saves"   # OUTSIDE prefix, survives reinstall/update
 
 # run helper that respects SCOPE
 priv() { if [ -n "$RUN" ]; then $RUN "$@"; else "$@"; fi; }
@@ -145,6 +149,26 @@ maybe_import_saves() {
                 warn "Could not copy saves from ${orig}."
             fi ;;
     esac
+}
+
+# Latest release tag from the GitHub API (no jq dependency).
+latest_tag() {
+    api="https://api.github.com/repos/${REPO}/releases/latest"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$api" 2>/dev/null
+    else
+        wget -qO- "$api" 2>/dev/null
+    fi | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+}
+
+# Version we are about to install: a tag for prebuilt, "source" for a source build.
+target_version() {
+    if [ "$MODE" = "source" ]; then echo "source"; return; fi
+    if [ "$TAG" = "latest" ]; then
+        t="$(latest_tag)"; echo "${t:-latest}"
+    else
+        echo "$TAG"
+    fi
 }
 
 # ---- launcher + desktop entry (shared by both modes) ------------------------
@@ -274,12 +298,29 @@ if [ "$UNINSTALL" = "1" ]; then
     uninstall
     exit 0
 fi
-say "Colobot (fork) installer - mode: ${MODE}, scope: ${SCOPE}, music: ${MUSIC}"
+
+TARGET="$(target_version)"
+INSTALLED=""
+[ -f "${PREFIX}/${VERSION_FILE}" ] && INSTALLED="$(cat "${PREFIX}/${VERSION_FILE}" 2>/dev/null)"
+
+if [ -n "$INSTALLED" ] && [ "$MODE" != "source" ] && [ "$INSTALLED" = "$TARGET" ] && [ "$FORCE" != "1" ]; then
+    say "Colobot (fork) ${INSTALLED} is already up to date. Use --force to reinstall."
+    exit 0
+fi
+
+if [ -n "$INSTALLED" ]; then
+    say "Updating Colobot (fork): ${INSTALLED} -> ${TARGET} (scope: ${SCOPE})"
+else
+    say "Installing Colobot (fork) ${TARGET} (mode: ${MODE}, scope: ${SCOPE}, music: ${MUSIC})"
+fi
+
 if [ "$MODE" = "source" ]; then
     install_source
 else
     install_prebuilt
 fi
+
+printf '%s\n' "$TARGET" | priv tee "${PREFIX}/${VERSION_FILE}" >/dev/null 2>&1 || true
 
 maybe_import_saves
 
