@@ -139,6 +139,8 @@ uninstall() {
     say "Removing ${APP} from ${PREFIX}"
     wipe_prefix
     priv rm -f "${BINDIR}/${APP}" "${APPSDIR}/${APP}.desktop" "${ICONDIR}/${APP}.svg"
+    rm -f "$HOME/.local/share/applications/colobot.desktop"   # remove the "Colobot" icon override
+    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
     say "Uninstalled. (Saves in ${SAVEDIR} were left untouched.)"
 }
 
@@ -214,13 +216,34 @@ EOF
 Type=Application
 Name=Colobot (fork)
 Comment=Colobot with in-editor IntelliSense and F12 jump-to-docs
-Exec=${APP}
+Exec=${BINDIR}/${APP}
 Icon=${APP}
 Terminal=false
 Categories=Game;Education;
 EOF
     priv install -Dm644 "$desktop" "${APPSDIR}/${APP}.desktop"
     rm -f "$desktop"
+
+    # If Colobot is already installed (e.g. from apt), shadow its menu entry with
+    # a user-level override so a pinned "Colobot" icon launches the fork instead.
+    if [ -e /usr/share/applications/colobot.desktop ] || [ -e "$HOME/.local/share/applications/colobot.desktop" ]; then
+        ov="$(mktemp)"
+        cat > "$ov" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Colobot
+Comment=Colobot (fork)
+Exec=${BINDIR}/${APP}
+Icon=colobot
+Terminal=false
+Categories=Game;Education;
+EOF
+        install -Dm644 "$ov" "$HOME/.local/share/applications/colobot.desktop"
+        rm -f "$ov"
+        say "Pointed the existing 'Colobot' menu icon at the fork."
+    fi
+
+    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 }
 
 # ---- prebuilt mode -----------------------------------------------------------
@@ -327,6 +350,7 @@ INSTALLED=""
 
 if [ -n "$INSTALLED" ] && [ "$MODE" != "source" ] && [ "$INSTALLED" = "$TARGET" ] && [ "$FORCE" != "1" ]; then
     say "Colobot (fork) ${INSTALLED} is already up to date. Use --force to reinstall."
+    install_launcher   # still (re)create the launcher + menu entry, in case they went missing
     exit 0
 fi
 
