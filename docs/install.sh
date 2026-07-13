@@ -234,6 +234,7 @@ Exec=${BINDIR}/${APP}
 Icon=${APP}
 Terminal=false
 Categories=Game;Education;
+StartupWMClass=colobot
 EOF
     priv install -Dm644 "$desktop" "${APPSDIR}/${APP}.desktop"
     rm -f "$desktop"
