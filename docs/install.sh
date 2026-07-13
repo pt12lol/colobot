@@ -138,7 +138,9 @@ wipe_prefix() {
 uninstall() {
     say "Removing ${APP} from ${PREFIX}"
     wipe_prefix
-    priv rm -f "${BINDIR}/${APP}" "${APPSDIR}/${APP}.desktop" "${ICONDIR}/${APP}.svg"
+    priv rm -f "${BINDIR}/${APP}" "${APPSDIR}/${APP}.desktop"
+    icon_theme="$(dirname "$(dirname "$ICONDIR")")"   # .../icons/hicolor
+    priv find "$icon_theme" -type f -name "${APP}.*" -delete 2>/dev/null || true
     rm -f "$HOME/.local/share/applications/colobot.desktop"   # remove the "Colobot" icon override
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
     say "Uninstalled. (Saves in ${SAVEDIR} were left untouched.)"
@@ -206,8 +208,20 @@ EOF
     priv install -Dm755 "$launcher" "${BINDIR}/${APP}"
     rm -f "$launcher"
 
-    if [ -f "${PREFIX}/share/icons/${APP}.svg" ]; then
-        priv install -Dm644 "${PREFIX}/share/icons/${APP}.svg" "${ICONDIR}/${APP}.svg"
+    # Install the app icon(s) under the launcher name so the desktop entry's
+    # Icon=${APP} resolves. The package ships icons as 'colobot.<ext>' inside the
+    # hicolor theme (scalable/apps + png sizes) - copy each across, renamed to
+    # ${APP}, into the matching size dir of the target theme.
+    icon_src_theme="${PREFIX}/share/icons/hicolor"
+    icon_dst_theme="$(dirname "$(dirname "$ICONDIR")")"   # .../icons/hicolor
+    if [ -d "$icon_src_theme" ]; then
+        find "$icon_src_theme" -type f -name 'colobot.*' | while IFS= read -r ic; do
+            rel="${ic#"$icon_src_theme"/}"     # np. scalable/apps/colobot.svg
+            ext="${ic##*.}"
+            priv install -Dm644 "$ic" "${icon_dst_theme}/$(dirname "$rel")/${APP}.${ext}"
+        done
+        command -v gtk-update-icon-cache >/dev/null 2>&1 \
+            && priv gtk-update-icon-cache -f -t "$icon_dst_theme" 2>/dev/null || true
     fi
 
     desktop="$(mktemp)"
