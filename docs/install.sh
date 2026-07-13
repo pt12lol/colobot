@@ -203,7 +203,7 @@ install_launcher() {
 # Colobot (fork) launcher - relocatable, points the binary at its bundled data.
 DIR="${PREFIX}"
 export LD_LIBRARY_PATH="\$DIR/lib/colobot:\${LD_LIBRARY_PATH:-}"
-exec "\$DIR/games/colobot" -datadir "\$DIR/share/games/colobot" -savedir "${SAVEDIR}" "\$@"
+exec "\$DIR/games/colobot" -datadir "\$DIR/share/games/colobot" -langdir "\$DIR/share/locale" -savedir "${SAVEDIR}" "\$@"
 EOF
     priv install -Dm755 "$launcher" "${BINDIR}/${APP}"
     rm -f "$launcher"
